@@ -19,27 +19,27 @@ impl<E> Delegate<E> {
         }
     }
 
-    pub async fn broadcast(&self, channel: DelegateName, data: Data) -> Result<Reply, E> {
+    pub async fn broadcast(&self, name: DelegateName, data: Data) -> Result<Reply, E> {
         // Get all listeners
         let listener = self.listeners.read().await;
-        let listener_to_channel = listener.get(channel).unwrap();
+        let listener_to_name = listener.get(name).unwrap();
         
-        listener_to_channel(data)
+        listener_to_name(data)
     }
 
-    pub async fn listens<F>(&self, channel: DelegateName, handler: F) 
+    pub async fn listens<F>(&self, name: DelegateName, handler: F) 
     where 
         F: Fn(Data) -> Result<Reply, E> + Send + Sync + 'static
     {
         let mut listeners = self.listeners.write().await;
-        listeners.insert(channel, Box::new(handler));
+        listeners.insert(name, Box::new(handler));
     }
 }
 
 #[macro_export]
 macro_rules! listens {
-    ($broker:expr, $channel:expr, $consumer:expr, $method:ident) => {{
+    ($broker:expr, $name:expr, $consumer:expr, $method:ident) => {{
         let consumer_clone = $consumer.clone();
-        $broker.listens($channel, move |data| consumer_clone.$method(data)).await;
+        $broker.listens($name, move |data| consumer_clone.$method(data)).await;
     }};
 }
