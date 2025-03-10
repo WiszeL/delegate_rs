@@ -2,15 +2,13 @@ use std::{fmt::Error, sync::Arc};
 
 use crate::{listens, make_data, make_reply, Data, Delegate, Reply};
 
-struct ConsumerTest {
-    delegate: Arc<Delegate<Error>>
-}
+struct ConsumerTest;
 
 impl ConsumerTest {
     pub async fn new(delegate: Arc<Delegate<Error>>) -> Arc<Self> {
-        let consumer = Arc::new(Self { delegate });
+        let consumer = Arc::new(Self);
 
-        listens!(consumer, test_channel);
+        listens!(delegate, consumer, test_channel);
 
         consumer
     }
