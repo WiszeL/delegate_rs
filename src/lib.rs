@@ -38,9 +38,9 @@ impl<E> Delegate<E> {
 
 #[macro_export]
 macro_rules! listens {
-    ($delegate:expr, $consumer:expr, $method:ident) => {{
+    ($consumer:expr, $method:ident) => {{
         let consumer_clone = $consumer.clone();
-        $delegate.listens(stringify!($method), move |data| consumer_clone.$method(data)).await;
+        $consumer.delegate.listens(stringify!($method), move |data| consumer_clone.$method(data)).await;
     }};
 }
 

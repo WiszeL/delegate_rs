@@ -2,19 +2,21 @@ use std::{fmt::Error, sync::Arc};
 
 use crate::{listens, make_data, make_reply, Data, Delegate, Reply};
 
-struct ConsumerTest;
+struct ConsumerTest {
+    delegate: Arc<Delegate<Error>>
+}
 
 impl ConsumerTest {
     pub async fn new(delegate: Arc<Delegate<Error>>) -> Arc<Self> {
-        let consumer = Arc::new(Self);
+        let consumer = Arc::new(Self { delegate });
 
-        listens!(delegate, consumer, test_channel);
+        listens!(consumer, test_channel);
 
         consumer
     }
 
     fn test_channel(&self, data: Data) -> Result<Reply, Error> {
-        let data = data.downcast::<String>().unwrap();
+        let data = *data.downcast::<String>().unwrap();
         let new_str = format!("Do something, answer is: {} modified!", data);
         println!("{}", new_str);
 
