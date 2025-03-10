@@ -4,7 +4,7 @@ use std::{any::Any, collections::HashMap, sync::Arc};
 #[cfg(test)]
 mod test;
 
-mod macros;
+pub mod macros;
 
 pub type DelegateName = &'static str;
 pub type Data = Box<dyn Any + Send + Sync>;
