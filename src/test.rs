@@ -1,33 +1,36 @@
 use std::{fmt::Error, sync::Arc};
 
-use crate::{listens, Data, Delegate, Reply};
+use crate::{listens, make_data, make_reply, Data, Delegate, Reply};
 
-struct ConsumerTest;
+struct ConsumerTest {
+    delegate: Arc<Delegate<Error>>
+}
 
 impl ConsumerTest {
-    pub async fn new(broker: Arc<Delegate<Error>>) -> Arc<Self> {
-        let consumer = Arc::new(Self);
+    pub async fn new(delegate: Arc<Delegate<Error>>) -> Arc<Self> {
+        let consumer = Arc::new(Self { delegate });
 
-        listens!(broker, "test_channel", consumer, do_something);
+        listens!(consumer, test_channel);
 
         consumer
     }
 
-    fn do_something(&self, data: Data) -> Result<Reply, Error> {
+    fn test_channel(&self, data: Data) -> Result<Reply, Error> {
+        let data = data.downcast::<String>().unwrap();
         let new_str = format!("Do something, answer is: {} modified!", data);
         println!("{}", new_str);
 
-        Ok(new_str + " reply!")
+        make_reply!(())
     }
 }
 
 #[tokio::test]
 async fn broke_test() {
-    let broker = Arc::new(Delegate::new());
-    let _ = ConsumerTest::new(broker.clone()).await;
+    let delegate = Arc::new(Delegate::new());
+    let _ = ConsumerTest::new(delegate.clone()).await;
 
-    let first = broker.broadcast("test_channel", "first".to_string()).await.unwrap();
-    let second = broker.broadcast("test_channel", "second".to_string()).await.unwrap();
+    let first = delegate.broadcast("test_channel", make_data!("first".to_string())).await.unwrap().downcast::<String>().unwrap();
+    let second = delegate.broadcast("test_channel", make_data!("second".to_string())).await.unwrap().downcast::<String>().unwrap();
 
     println!("Result: {} AND {}", first, second);
 }
