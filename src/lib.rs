@@ -1,38 +1,54 @@
-use tokio::sync::RwLock;
-use std::{any::Any, collections::HashMap, sync::Arc};
+use dashmap::DashMap;
+use std::{any::Any, sync::Arc};
 
 #[cfg(test)]
 mod test;
 
-pub type DelegateName = &'static str;
-pub type Data = Box<dyn Any + Send + Sync>;
-pub type Reply = Box<dyn Any + Send + Sync>;
+type Data = Box<dyn Any + Send + Sync>;
+type Reply = Box<dyn Any + Send + Sync>;
 
 pub struct Delegate<E> {
-    listeners: Arc<RwLock<HashMap<DelegateName, Box<dyn Fn(Data) -> Result<Reply, E> + Send + Sync>>>>
+    listeners: Arc<DashMap<&'static str, Box<dyn Fn(Data) -> Result<Reply, E> + Send + Sync>>>
 }
 
 impl<E> Delegate<E> {
     pub fn new() -> Self {
         Self {
-            listeners: Arc::new(RwLock::new(HashMap::new())),
+            listeners: Arc::new(DashMap::new()),
         }
     }
 
-    pub async fn broadcast(&self, name: DelegateName, data: Data) -> Result<Reply, E> {
-        // Get all listeners
-        let listener = self.listeners.read().await;
-        let listener_to_name = listener.get(name).unwrap();
+    pub fn broadcast<D, R>(&self, name: &'static str, data: D) -> Result<R, E>
+    where
+        D: Any + Send + Sync,
+        R: Any + Send + Sync,
+    {
+        let listener = self.listeners.get(name).expect("No listener registered for this name");
         
-        listener_to_name(data)
+        // Box the data to match the expected Data type
+        let reply_box = listener(Box::new(data) as Data)?;
+        
+        // Downcast the reply to the expected type R
+        match reply_box.downcast::<R>() {
+            Ok(boxed) => Ok(*boxed),
+            Err(_) => panic!("Reply type mismatch"),
+        }
     }
 
-    pub async fn listens<F>(&self, name: DelegateName, handler: F) 
-    where 
-        F: Fn(Data) -> Result<Reply, E> + Send + Sync + 'static
+    pub fn listens<D, R, F>(&self, name: &'static str, handler: F)
+    where
+        D: Any + Send + Sync,
+        R: Any + Send + Sync,
+        F: Fn(D) -> Result<R, E> + Send + Sync + 'static,
     {
-        let mut listeners = self.listeners.write().await;
-        listeners.insert(name, Box::new(handler));
+        self.listeners.insert(name, Box::new(move |data: Data| {
+            // Downcast the boxed data to the expected type.
+            let boxed_d = data.downcast::<D>().expect("Data type mismatch in listens");
+            let r = handler(*boxed_d)?;
+
+            // Box the result as the expected reply type.
+            Ok(Box::new(r) as Reply)
+        }));
     }
 }
 
@@ -40,20 +56,6 @@ impl<E> Delegate<E> {
 macro_rules! listens {
     ($delegate:expr, $consumer:expr, $method:ident) => {{
         let consumer_clone = $consumer.clone();
-        $delegate.listens(stringify!($method), move |data| consumer_clone.$method(data)).await;
+        $delegate.listens(stringify!($method), move |data| consumer_clone.$method(data));
     }};
-}
-
-#[macro_export]
-macro_rules! make_data {
-    ($data:expr) => {
-        Box::new($data) as Data
-    };
-}
-
-#[macro_export]
-macro_rules! make_reply {
-    ($data:expr) => {
-        Ok(Box::new($data) as Reply)
-    };
 }
