@@ -118,7 +118,7 @@ impl<E> Delegate<E> {
 macro_rules! listens {
     ($consumer:expr, $method:ident) => {{
         let consumer_clone = $consumer.clone();
-        $consumer.delegate.listens(stringify!($method), move |data| consumer_clone.$method(data))
+        $consumer.delegate.listens(stringify!($method), move |data| consumer_clone.$method(data));
     }};
 }
 
@@ -130,6 +130,6 @@ macro_rules! async_listens {
             // Clone again inside the closure so the async block doesn't borrow consumer_clone.
             let consumer_inner = consumer_clone.clone();
             async move { consumer_inner.$method(data).await }
-        })
+        });
     }};
 }
