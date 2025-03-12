@@ -130,3 +130,17 @@ macro_rules! async_listens {
         });
     }};
 }
+
+#[macro_export]
+macro_rules! broadcast {
+    ($delegate_name:literal, $data:expr) => {
+        self.get_delegate_manager().broadcast($delegate_name, $data);
+    };
+}
+
+#[macro_export]
+macro_rules! async_broadcast {
+    ($delegate_name:literal, $data:expr) => {
+        self.get_delegate_manager().async_broadcast($delegate_name, $data);
+    };
+}
