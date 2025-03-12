@@ -3,10 +3,12 @@ name = "delegate_rs"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = ["delegate", "macros"]
+
 [dependencies]
-dashmap = "6.1.0"
-futures = "0.3.31"
-tokio = { version = "1.44.0", features = ["macros", "sync"] }
+delegate = { path = "./delegate" }
+macros = { path = "./macros" }
 
 [dev-dependencies]
 tokio = { version = "1.44.0", features = ["rt"]}

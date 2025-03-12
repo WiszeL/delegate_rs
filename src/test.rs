@@ -1,14 +1,15 @@
 use std::{fmt::Error, sync::Arc};
 
-use crate::{async_listens, listens, Delegate};
+use macros::delegate;
 
-struct ConsumerTest {
-    delegate: Arc<Delegate<Error>>
-}
+use crate::{async_listens, listens, DelegateManager};
+
+#[delegate(error="Error")]
+struct ConsumerTest {}
 
 impl ConsumerTest {
-    pub fn new(delegate: Arc<Delegate<Error>>) -> Arc<Self> {
-        let consumer = Arc::new(Self {delegate});
+    pub fn new(delegate_manager: Arc<DelegateManager<Error>>) -> Arc<Self> {
+        let consumer = Arc::new(Self {delegate_manager});
 
         listens!(consumer, test_channel);
         async_listens!(consumer, async_test_channel);
@@ -30,7 +31,7 @@ impl ConsumerTest {
 
 #[tokio::test]
 async fn broke_test() {
-    let delegate = Arc::new(Delegate::new());
+    let delegate = Arc::new(DelegateManager::new());
     let _ = ConsumerTest::new(delegate.clone());
 
     let first: String = delegate.broadcast("test_channel", "first".to_string()).unwrap();
