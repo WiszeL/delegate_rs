@@ -22,7 +22,7 @@ impl<E> DelegateManager<E> {
     }
 
     /// Broadcast to a listener that is expected to be synchronous.
-    pub fn broadcast<D, R>(&self, name: &'static str, data: D) -> Result<R, E>
+    pub fn broadcast<'a, D, R>(&self, name: &'a str, data: D) -> Result<R, E>
     where
         D: Any + Send + Sync,
         R: Any + Send + Sync,
@@ -45,7 +45,7 @@ impl<E> DelegateManager<E> {
 
     /// Broadcast to a listener, allowing async listeners.
     /// If the listener is synchronous, its result is returned immediately BUT NOT RECOMMENDED TO USE THIS
-    pub async fn async_broadcast<D, R>(&self, name: &'static str, data: D) -> Result<R, E>
+    pub async fn async_broadcast<'a, D, R>(&self, name: &'a str, data: D) -> Result<R, E>
     where
         D: Any + Send + Sync,
         R: Any + Send + Sync,
