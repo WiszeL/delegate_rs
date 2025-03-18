@@ -5,5 +5,6 @@ edition = "2024"
 
 [dependencies]
 dashmap = "6.1.0"
+derive_more = { version = "2.0.1", features = ["display"] }
 futures = "0.3.31"
-tokio = { version = "1.44.0", features = ["macros", "sync"] }
+thiserror = "2.0.12"

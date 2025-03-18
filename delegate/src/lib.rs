@@ -1,20 +1,29 @@
 use dashmap::DashMap;
+use derive_more::Display;
 use futures::future::BoxFuture;
+use thiserror::Error;
 use std::{any::Any, future::Future, sync::Arc};
 
 type Data = Box<dyn Any + Send + Sync>;
 type Reply = Box<dyn Any + Send + Sync>;
 
-pub enum Listener<E> {
-    Sync(Box<dyn Fn(Data) -> Result<Reply, E> + Send + Sync>),
-    Async(Box<dyn Fn(Data) -> BoxFuture<'static, Result<Reply, E>> + Send + Sync>),
+#[derive(Debug, Display, Error)]
+pub enum Error {
+    Mismatched(String),
+    NoListener(String),
+    ExternalError(Box<dyn std::error::Error + Send + Sync>),
 }
 
-pub struct DelegateManager<E> {
-    delegates: Arc<DashMap<&'static str, Listener<E>>>,
+pub enum Listener {
+    Sync(Box<dyn Fn(Data) -> Result<Reply, Error> + Send + Sync>),
+    Async(Box<dyn Fn(Data) -> BoxFuture<'static, Result<Reply, Error>> + Send + Sync>),
 }
 
-impl<E> DelegateManager<E> {
+pub struct DelegateManager {
+    delegates: Arc<DashMap<&'static str, Listener>>,
+}
+
+impl DelegateManager {
     pub fn new() -> Self {
         Self {
             delegates: Arc::new(DashMap::new()),
@@ -22,55 +31,56 @@ impl<E> DelegateManager<E> {
     }
 
     /// Broadcast to a listener that is expected to be synchronous.
-    pub fn broadcast<'a, D, R>(&self, name: &'a str, data: D) -> Result<R, E>
+    pub fn broadcast<'a, R, D>(&self, name: &'a str, data: D) -> Result<R, Error>
     where
-        D: Any + Send + Sync,
         R: Any + Send + Sync,
+        D: Any + Send + Sync,
     {
         let listener = self
             .delegates
             .get(name)
-            .expect("No listener registered for this name");
+            .ok_or(Error::NoListener(format!("No listener registered for {name}")))?;
 
         let reply_box = match &*listener {
             Listener::Sync(sync_fn) => (sync_fn)(Box::new(data) as Data),
-            Listener::Async(_) => panic!("Called broadcast_sync on an async listener"),
+            Listener::Async(_) => Err(Error::Mismatched(format!("Called broadcast_async on sync listener {name}"))),
         }?;
 
         match reply_box.downcast::<R>() {
             Ok(boxed) => Ok(*boxed),
-            Err(_) => panic!("Reply type mismatch"),
+            Err(_) => Err(Error::Mismatched(format!("Reply type mismatch on {name}"))),
         }
     }
 
     /// Broadcast to a listener, allowing async listeners.
     /// If the listener is synchronous, its result is returned immediately BUT NOT RECOMMENDED TO USE THIS
-    pub async fn async_broadcast<'a, D, R>(&self, name: &'a str, data: D) -> Result<R, E>
+    pub async fn async_broadcast<'a, R, D>(&self, name: &'a str, data: D) -> Result<R, Error>
     where
-        D: Any + Send + Sync,
         R: Any + Send + Sync,
+        D: Any + Send + Sync,
     {
         let listener = self
             .delegates
             .get(name)
-            .expect("No listener registered for this name");
+            .ok_or(Error::NoListener(format!("No listener registered for {name}")))?;
 
         let reply_box = match &*listener {
             Listener::Async(async_fn) => async_fn(Box::new(data) as Data).await,
-            Listener::Sync(sync_fn) => (sync_fn)(Box::new(data) as Data),
+            Listener::Sync(_) => Err(Error::Mismatched(format!("Called broadcast_sync on async listener {name}"))),
         }?;
 
         match reply_box.downcast::<R>() {
             Ok(boxed) => Ok(*boxed),
-            Err(_) => panic!("Reply type mismatch"),
+            Err(_) => Err(Error::Mismatched(format!("Reply type mismatch on {name}."))),
         }
     }
 
     // Register a synchronous listener.
-    pub fn listens<D, R, F>(&self, name: &'static str, handler: F)
+    pub fn listens<D, R, E, F>(&self, name: &'static str, handler: F)
     where
         D: Any + Send + Sync,
         R: Any + Send + Sync,
+        E: std::error::Error + Send + Sync + 'static,
         F: Fn(D) -> Result<R, E> + Send + Sync + 'static,
     {
         self.delegates.insert(
@@ -78,18 +88,20 @@ impl<E> DelegateManager<E> {
             Listener::Sync(Box::new(move |data: Data| {
                 let boxed_d = data
                     .downcast::<D>()
-                    .expect("Data type mismatch in listens");
-                let r = handler(*boxed_d)?;
+                    .map_err(|_| Error::Mismatched(format!("Data type mismatch in listens {name}")))?;
+                let r = handler(*boxed_d)
+                    .map_err(|err| Error::ExternalError(Box::new(err)))?;
                 Ok(Box::new(r) as Reply)
             })),
         );
     }
 
     // Register an async listener.
-    pub fn async_listens<D, R, F, Fut>(&self, name: &'static str, handler: F)
+    pub fn async_listens<D, R, E, F, Fut>(&self, name: &'static str, handler: F)
     where
         D: Any + Send + Sync,
         R: Any + Send + Sync,
+        E: std::error::Error + Send + Sync + 'static,
         F: Fn(D) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<R, E>> + Send + 'static,
     {
@@ -102,8 +114,10 @@ impl<E> DelegateManager<E> {
                 Box::pin(async move {
                     let boxed_d = data
                         .downcast::<D>()
-                        .expect("Data type mismatch in async_listens");
-                    let r = handler(*boxed_d).await?;
+                        .map_err(|_| Error::Mismatched(format!("Data type mismatch in listens {name}")))?;
+                    let r = handler(*boxed_d)
+                        .await
+                        .map_err(|err| Error::ExternalError(Box::new(err)))?;
                     Ok(Box::new(r) as Reply)
                 })
             })),
@@ -134,13 +148,13 @@ macro_rules! async_listens {
 #[macro_export]
 macro_rules! broadcast {
     ($instance:expr, $delegate_name:expr, $data:expr) => {
-        $instance.get_delegate_manager().broadcast($delegate_name, $data);
+        $instance.get_delegate_manager().broadcast($delegate_name, $data)
     };
 }
 
 #[macro_export]
 macro_rules! async_broadcast {
     ($instance:expr, $delegate_name:expr, $data:expr) => {
-        $instance.get_delegate_manager().async_broadcast($delegate_name, $data).await;
+        $instance.get_delegate_manager().async_broadcast($delegate_name, $data).await
     };
 }

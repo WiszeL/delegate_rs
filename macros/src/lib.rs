@@ -1,45 +1,15 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    parse::{Parse, ParseStream},
-    parse_macro_input, token::Eq, Ident, ItemStruct, LitStr, Fields, Field,
+    parse_macro_input, Ident, ItemStruct, Fields, Field,
 };
-
-/// A custom parser that expects an attribute of the form: error = "Exception"
-struct DelegateAttr {
-    error: LitStr,
-}
-
-impl Parse for DelegateAttr {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        // Expect the identifier "error"
-        let ident: Ident = input.parse()?;
-        if ident != "error" {
-            return Err(input.error("expected `error`"));
-        }
-
-        // Parse the '=' token
-        input.parse::<Eq>()?;
-        
-        // Parse a literal string (e.g., "Exception")
-        let lit: LitStr = input.parse()?;
-        Ok(DelegateAttr { error: lit })
-    }
-}
 
 /// The attribute macro.
 /// Usage example:
-///   #[delegate(error = "Exception")]
+///   #[delegate]
 ///   struct ConsumerTest { ... }
 #[proc_macro_attribute]
-pub fn delegate(attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Parse the attribute using our custom parser.
-    let delegate_attr = parse_macro_input!(attr as DelegateAttr);
-    // Get the error type as a string.
-    let error_type = delegate_attr.error.value();
-    // Create an identifier from the error type.
-    let error_ident = Ident::new(&error_type, proc_macro2::Span::call_site());
-
+pub fn delegate(_: TokenStream, item: TokenStream) -> TokenStream {
     // Parse the item as a struct.
     let mut input = parse_macro_input!(item as ItemStruct);
     let struct_ident = &input.ident;
@@ -53,7 +23,7 @@ pub fn delegate(attr: TokenStream, item: TokenStream) -> TokenStream {
                 vis: syn::parse_quote!(pub),
                 ident: Some(Ident::new("delegate_manager", proc_macro2::Span::call_site())),
                 colon_token: Some(Default::default()),
-                ty: syn::parse_quote!(std::sync::Arc<DelegateManager<#error_ident>>),
+                ty: syn::parse_quote!(std::sync::Arc<::delegate_rs::DelegateManager>),
             });
         }
         _ => {
@@ -71,7 +41,7 @@ pub fn delegate(attr: TokenStream, item: TokenStream) -> TokenStream {
         #input
 
         impl #struct_ident {
-            pub fn get_delegate_manager(&self) -> &std::sync::Arc<DelegateManager<#error_ident>> {
+            pub fn get_delegate_manager(&self) -> &std::sync::Arc<::delegate_rs::DelegateManager> {
                 &self.delegate_manager
             }
         }

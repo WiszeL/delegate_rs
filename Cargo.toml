@@ -11,4 +11,4 @@ delegate = { path = "./delegate" }
 macros = { path = "./macros" }
 
 [dev-dependencies]
-tokio = { version = "1.44.0", features = ["rt"]}
+tokio = { version = "1.44.1", features = ["rt", "macros"]}
