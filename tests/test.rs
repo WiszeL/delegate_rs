@@ -1,61 +1,62 @@
-use std::{fmt::Error, sync::Arc};
+use std::sync::Arc;
 
-use delegate::{async_broadcast, broadcast, DelegateManager};
-use delegate_rs::{async_listens, listens, delegate};
+use delegate_rs::{
+    Error, async_bind_delegate, async_broadcast_delegate, bind_delegate, broadcast_delegate,
+};
 
-#[delegate]
-struct ConsumerTest {}
+pub type AppResult<T> = Result<T, Error>;
+
+struct ConsumerTest;
 
 impl ConsumerTest {
-    pub fn new(delegate_manager: Arc<DelegateManager>) -> Arc<Self> {
-        let consumer = Arc::new(Self { delegate_manager });
+    pub fn new() -> Arc<Self> {
+        let consumer = Arc::new(Self);
 
-        listens!(consumer, test_channel);
-        listens!(consumer, void_test_channel);
-        async_listens!(consumer, async_test_channel);
+        bind_delegate!(consumer, test_channel);
+        async_bind_delegate!(consumer, async_test_channel);
 
         consumer
     }
 
-    fn test_channel(&self, data: String) -> Result<String, Error> {
+    fn test_channel(&self, data: &str) -> Result<String, Error> {
         Ok(format!("Test Channel: {data}."))
     }
 
-    fn void_test_channel(&self, data: &str) -> Result<(), Error> {
-        println!("Void test Channel! data: {data}");
+    async fn async_test_channel(&self, data: String) -> Result<(), Error> {
+        // Simulate async work with 3 second delay
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+        println!("Async Test Channel: {data}.");
 
         Ok(())
     }
-
-    async fn async_test_channel(&self, data: String) -> Result<String, Error> {
-        Ok(format!("Async Test Channel: {data}."))
-    }
 }
 
-#[delegate]
-struct ProducerTest {}
+struct ProducerTest;
 
 impl ProducerTest {
-    pub fn new(delegate_manager: Arc<DelegateManager>) -> Arc<Self> {
-        Arc::new(Self { delegate_manager })
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self)
     }
 
-    pub async fn produce_test_channel(&self) {
-        let hello: String = broadcast!(self, "test_channel", "Hello".to_string()).unwrap();
-        let world: String = broadcast!(self, "test_channel", "World".to_string()).unwrap();
-        let _: () = broadcast!(self, "void_test_channel", "Void Data").unwrap();
+    pub async fn produce_test_channel(&self) -> AppResult<()> {
+        let hello = broadcast_delegate!("test_channel", "hello", String)?;
+        println!("Result Hello: {hello}");
 
-        let hello_world: String = async_broadcast!(self, "async_test_channel", "async hello world!".to_string()).unwrap();
+        async_broadcast_delegate!("async_test_channel", "async hello world!".to_string())?;
 
-        println!("RESULT: {hello} {world} {hello_world}")
+        let world = broadcast_delegate!("test_channel", "world", String)?;
+        println!("Result World: {world}");
+
+        Ok(())
     }
 }
 
 #[tokio::test]
 async fn broke_test() {
-    let delegate_manager = Arc::new(DelegateManager::new());
-    let _ = ConsumerTest::new(delegate_manager.clone());
-    let producer = ProducerTest::new(delegate_manager.clone());
+    delegate_rs::init();
 
-    producer.produce_test_channel().await;
+    let _ = ConsumerTest::new();
+    let producer = ProducerTest::new();
+
+    producer.produce_test_channel().await.unwrap();
 }
