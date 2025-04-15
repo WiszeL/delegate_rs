@@ -37,15 +37,12 @@ pub enum Listener {
 
 pub struct DelegateManager {
     single: Arc<DashMap<&'static str, Listener>>,
-
-    pub type_registry: Arc<DashMap<&'static str, (TypeId, TypeId)>>,
 }
 
 impl Default for DelegateManager {
     fn default() -> Self {
         Self {
             single: Arc::new(DashMap::new()),
-            type_registry: Arc::new(DashMap::new()),
         }
     }
 }
@@ -138,7 +135,6 @@ impl DelegateManager {
         let type_id_arg = TypeId::of::<D>();
         let type_id_return = TypeId::of::<R>();
 
-        self.type_registry.insert(name, (TypeId::of::<D>(), TypeId::of::<R>()));
         self.single.insert(
             name,
             Listener::Sync {
@@ -169,7 +165,6 @@ impl DelegateManager {
 
         let handler = Arc::new(handler);
 
-        self.type_registry.insert(name, (TypeId::of::<D>(), TypeId::of::<R>()));
         self.single.insert(
             name,
             Listener::Async {
@@ -191,6 +186,7 @@ impl DelegateManager {
         );
     }
 
+    #[inline(always)]
     fn check_type<T>(delegate_name: &str, type_id: &TypeId, on: &'static str) -> Result<(), Error>
     where
         T: 'static,
@@ -205,9 +201,11 @@ impl DelegateManager {
     }
 
     pub fn get_types(&self, name: &str) -> Option<(TypeId, TypeId)> {
-        self.single.get(name).map(|entry| match entry.value() {
-            Listener::Sync { type_id_arg, type_id_return, .. } => (*type_id_arg, *type_id_return),
-            Listener::Async { type_id_arg, type_id_return, .. } => (*type_id_arg, *type_id_return),
+        self.single.get(name).map(|entry| match &*entry {
+            Listener::Sync { type_id_arg, type_id_return, .. } 
+            | Listener::Async { type_id_arg, type_id_return, .. } => {
+                (*type_id_arg, *type_id_return)
+            }
         })
     }
 }

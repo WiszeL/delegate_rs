@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dev-dependencies]
-tokio = { version = "1.44.1", features = ["rt", "macros", "time"] }
+tokio = { version = "1.44.2", features = ["rt", "macros", "time"] }
 
 [dependencies]
 dashmap = "6.1.0"
 futures = "0.3.31"
-log = "0.4.27"
-once_cell = "1.21.2"
+tracing = "0.1.41"
+once_cell = "1.21.3"
 thiserror = "2.0.12"
 
 [profile.test]

@@ -1,37 +1,3 @@
-// #[macro_export]
-// macro_rules! bind {
-//     ($delegate_manager:expr, $instance:expr, $method:ident) => {{
-//         let instance_clone = $instance.clone();
-//         $delegate_manager.bind(stringify!($method), move |data| instance_clone.$method(data));
-//     }};
-// }
-
-// #[macro_export]
-// macro_rules! async_bind {
-//     ($delegate_manager: expr, $instance:expr, $method:ident) => {{
-//         let instance_clone = $instance.clone();
-//         $delegate_manager.async_bind(stringify!($method), move |data| {
-//             // Clone again inside the closure so the async block doesn't borrow instance_clone.
-//             let instance_inner = instance_clone.clone();
-//             async move { instance_inner.$method(data).await }
-//         });
-//     }};
-// }
-
-// #[macro_export]
-// macro_rules! broadcast {
-//     ($delegate_manager: expr, $instance:expr, $delegate_name:expr, $data:expr) => {
-//         $delegate_manager.broadcast($delegate_name, $data)
-//     };
-// }
-
-// #[macro_export]
-// macro_rules! async_broadcast {
-//     ($delegate_manager: expr, $instance:expr, $delegate_name:expr, $data:expr) => {
-//         $delegate_manager.async_broadcast($delegate_name, $data).await
-//     };
-// }
-
 #[macro_export]
 macro_rules! bind_delegate {
     ($instance:expr, $method:ident) => {

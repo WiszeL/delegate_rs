@@ -6,8 +6,8 @@ pub static SINGLETON_DELEGATE_MANAGER: OnceCell<DelegateManager> = OnceCell::new
 
 pub fn init() {
     match SINGLETON_DELEGATE_MANAGER.set(DelegateManager::default()) {
-        Ok(_) => log::info!("Singleton Delegate Manager is successfully initialized!"),
-        Err(_) => log::warn!("Singel Delegate Manager is already initialized!"),
+        Ok(_) => tracing::info!("Singleton Delegate Manager is successfully initialized!"),
+        Err(_) => tracing::warn!("Singel Delegate Manager is already initialized!"),
     }
 }
 
